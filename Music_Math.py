@@ -289,7 +289,6 @@ if __name__ == "__main__":
         # 运行算法
         best_ind = run_genetic_algorithm(fitness_func, func_name=fname)
         debug_genome(best_ind)
-        breakpoint()
         # 保存结果
         output_filename = f"output_{fname}.mid"
         save_to_midi(best_ind, output_filename)

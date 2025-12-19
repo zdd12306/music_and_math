@@ -268,12 +268,12 @@ def fitness_rhythmic_rest(melody):
     return 0
 
 
-def create_weighted_fitness(a, b, c, d, e, f, g):
+def create_weighted_fitness(a, b, c, d, e):
     """
     a: advanced logic, b: variety, c: shape, d: range, e: muspy
     f: SUSTAIN (HOLD) reward, g: REST (STOP) reward
     """
-    name = f"fit_w_{a}_{b}_{c}_{d}_{e}_{f}_{g}"
+    name = f"fit_w_{a}_{b}_{c}_{d}_{e}"
     
     def internal_fitness(melody):
         if not melody.notes:
@@ -282,12 +282,10 @@ def create_weighted_fitness(a, b, c, d, e, f, g):
         score = 0
         score += fitness_function_11(melody) * a
         score += fitness_function_10(melody) * b
-        score += fitness_function_7(melody) * c
-        score += fitness_function_9(melody) * d
         
         # --- New Rhythmic Character Boosts ---
-        score += fitness_rhythmic_sustain(melody) * f
-        score += fitness_rhythmic_rest(melody) * g
+        score += fitness_rhythmic_sustain(melody) * c
+        score += fitness_rhythmic_rest(melody) * d
 
         
         if MUSPY_AVAILABLE:
@@ -300,10 +298,10 @@ def create_weighted_fitness(a, b, c, d, e, f, g):
 
 # Define the range of weights you want to test
 # Example: Testing weights 0.5, 1.0, and 2.0 for different components
-weight_options = [0.5, 0.7, 1.2, 3.0]
+weight_options = [0.5, 0.7, 1.1, 1.3, 2.2, 2.9]
 
 # Generate all combinations (Grid Search)
-combinations = list(itertools.product(weight_options, repeat=7))
+combinations = list(itertools.product(weight_options, repeat=5))
 import random
 
 random.shuffle(combinations)
