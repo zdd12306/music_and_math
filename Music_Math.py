@@ -52,35 +52,65 @@ class Individual:
                 self.genes[0] = random.randint(0, NUM_PITCHES)
                 
         self.fitness = 0.0
-
+    # In your Individual class:            
     def to_notes(self):
-        """
-        解码器：将整数基因解码为 [(pitch, duration), ...] 格式
-        用于生成 MIDI 和计算适应度
-        """
-        notes = []
-        current_pitch = None
-        current_dur = 0
-        
-        for gene in self.genes:
-            if gene == CODE_REST:
-                if current_pitch is not None:
-                    notes.append((PITCH_MAP[current_pitch-1], current_dur * 0.5))
+            """
+            Decodes genes into a list of (pitch, start_time, duration).
+            This ensures rests actually take up space.
+            """
+            notes = []
+            current_pitch = None
+            current_start_time = 0.0
+            current_dur = 0
+            
+            for i, gene in enumerate(self.genes):
+                time_step = i * 0.5  # Each gene is an 8th note (0.5 beats)
+                
+                if 1 <= gene <= NUM_PITCHES:
+                    # 1. If a note was already playing, close it
+                    if current_pitch is not None:
+                        notes.append((PITCH_MAP[current_pitch-1], current_start_time, current_dur * 0.5))
+                    
+                    # 2. Start a new note
+                    current_pitch = gene
+                    current_start_time = time_step
+                    current_dur = 1
+                    
+                elif gene == CODE_HOLD:
+                    if current_pitch is not None:
+                        current_dur += 1 # Extend the current note
+                    # If HOLD follows a REST, we do nothing (it stays silent)
+                    
+                elif gene == CODE_REST:
+                    # If a note was playing, close it and reset
+                    if current_pitch is not None:
+                        notes.append((PITCH_MAP[current_pitch-1], current_start_time, current_dur * 0.5))
                     current_pitch = None
-                current_dur = 0
-            elif 1 <= gene <= NUM_PITCHES:
-                if current_pitch is not None:
-                    notes.append((PITCH_MAP[current_pitch-1], current_dur * 0.5))
-                current_pitch = gene
-                current_dur = 1
-            elif gene == CODE_HOLD:
-                if current_pitch is not None:
-                    current_dur += 1
+                    current_dur = 0
+
+            # Close the final note if it exists
+            if current_pitch is not None:
+                notes.append((PITCH_MAP[current_pitch-1], current_start_time, current_dur * 0.5))
+                
+            return notes
+    
+def debug_genome(individual):
+        genes = individual.genes
+        note_count = sum(1 for g in genes if 1 <= g <= NUM_PITCHES)
+        hold_count = sum(1 for g in genes if g == CODE_HOLD)
+        rest_count = sum(1 for g in genes if g == CODE_REST)
         
-        # 处理最后一个音
-        if current_pitch is not None:
-            notes.append((PITCH_MAP[current_pitch-1], current_dur * 0.5))
-        return notes
+        print(f"\n--- Genome Debug Tool ---")
+        print(f"DNA Sequence: {genes}")
+        print(f"Stats: Notes: {note_count} | Holds: {hold_count} | Rests: {rest_count}")
+        
+        # Check for "Illegal" Holds (Holds that appear after a Rest)
+        illegal_holds = 0
+        for i in range(1, len(genes)):
+            if genes[i] == CODE_HOLD and genes[i-1] == CODE_REST:
+                illegal_holds += 1
+        if illegal_holds > 0:
+            print(f"Warning: Found {illegal_holds} holds following a rest (these sound like silence).")
 
 class MelodyAdapter:
     """
@@ -133,10 +163,9 @@ def mutate(ind, rate=0.05):
             # 变异时也倾向于生成延长记号，保持节奏的长线条
             new_genes[i] = generate_weighted_gene()
             
-    # 再次修正首位基因
-    if new_genes[0] == CODE_HOLD:
-        new_genes[0] = random.randint(0, NUM_PITCHES)
-        
+    # # 再次修正首位基因
+    # if new_genes[0] == CODE_HOLD:
+    #     new_genes[0] = random.randint(0, NUM_PITCHES)
     return Individual(new_genes)
 
 def musical_transform(ind):
@@ -168,8 +197,8 @@ def musical_transform(ind):
 
 def run_genetic_algorithm(target_fitness_func, func_name="Unknown"):
     # 参数设置 [cite: 540]
-    POP_SIZE = 50
-    MAX_GEN = 100
+    POP_SIZE = 200
+    MAX_GEN = 1024
     ELITISM_COUNT = 2 # 精英保留数量
     
     # 初始化种群
@@ -184,9 +213,11 @@ def run_genetic_algorithm(target_fitness_func, func_name="Unknown"):
             # 将整数基因解码为音符列表，传给你的 fitness_function
             note_list = ind.to_notes()
             adapter = MelodyAdapter(note_list)
-            
+            # if ind == population[-1]:
+            #     breakpoint()
             # 调用外部传入的函数
             try:
+                
                 ind.fitness = target_fitness_func(adapter)
             except Exception as e:
                 ind.fitness = 0 # 防止报错中断
@@ -194,7 +225,6 @@ def run_genetic_algorithm(target_fitness_func, func_name="Unknown"):
         # 排序
         population.sort(key=lambda x: x.fitness, reverse=True)
         best_score = population[0].fitness
-        
         # 2. 生成下一代 [cite: 554]
         next_gen = []
         
@@ -217,8 +247,8 @@ def run_genetic_algorithm(target_fitness_func, func_name="Unknown"):
             c2 = mutate(c2)
             
             # 特殊变换
-            if random.random() < 0.1: c1 = musical_transform(c1)
-            if random.random() < 0.1: c2 = musical_transform(c2)
+            if random.random() < 0.03: c1 = musical_transform(c1)
+            if random.random() < 0.03: c2 = musical_transform(c2)
                 
             next_gen.append(c1)
             if len(next_gen) < POP_SIZE: next_gen.append(c2)
@@ -227,31 +257,21 @@ def run_genetic_algorithm(target_fitness_func, func_name="Unknown"):
         
         if gen % 200 == 0:
             print(f"  Gen {gen}: Best Score = {best_score:.2f}")
-
     return population[0]
 
-# === 6. MIDI 保存辅助函数 ===
 def save_to_midi(individual, filename):
     mf = MIDIFile(1)
     track = 0
-    time = 0
-    mf.addTrackName(track, time, "GA Melody")
-    mf.addTempo(track, time, 120)
+    start_time_offset = 0 
+    mf.addTrackName(track, start_time_offset, "GA Melody")
+    mf.addTempo(track, start_time_offset, 120)
     
-    # 解码
-    notes = individual.to_notes()
+    # Get the decoded notes: (pitch, start_time, duration)
+    decoded_notes = individual.to_notes()
     
-    # 写入音符
-    current_time = 0.0
-    for pitch, duration in notes: # to_notes 返回 (pitch, duration)
-        # 注意: 这里的 current_time 需要累加，或者如果 to_notes 没有返回 start_time，
-        # 我们需要在循环中计算它。
-        # 实际上 Individual.to_notes 返回的是相对时长列表。
-        # 我们需要更加精准的写入方式。
-        
-        # 重新调用一次带 offset 的逻辑以确保准确性
-        mf.addNote(track, 0, pitch, current_time, duration, 100)
-        current_time += duration
+    for pitch, start, duration in decoded_notes:
+        # mf.addNote(track, channel, pitch, time, duration, volume)
+        mf.addNote(track, 0, pitch, start, duration, 100)
         
     with open(filename, 'wb') as out_f:
         mf.writeFile(out_f)
@@ -268,7 +288,8 @@ if __name__ == "__main__":
         
         # 运行算法
         best_ind = run_genetic_algorithm(fitness_func, func_name=fname)
-        
+        debug_genome(best_ind)
+        breakpoint()
         # 保存结果
         output_filename = f"output_{fname}.mid"
         save_to_midi(best_ind, output_filename)
