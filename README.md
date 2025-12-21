@@ -36,15 +36,27 @@ pip install -r requirements.txt
 
 ```
 music_and_math/
+├── config.py                      # 🆕 配置文件（所有超参数）
 ├── main.py                        # 主程序：遗传算法引擎
-├── fitness_function_rhythm.py     # 节奏适应度函数库（8个函数）
-├── fitness_function_pitch.py      # 音高适应度函数库（13个函数）
+├── fitness_function_rhythm.py     # 节奏适应度函数库（精简版：3个核心函数）
+├── fitness_function_pitch.py      # 音高适应度函数库（精简版：3个核心函数）
 ├── playmid.py                     # MIDI播放器
 ├── evaluatemid.py                 # MIDI分析工具
 ├── visualmid.py                   # 可视化工具（钢琴卷帘图）
 ├── visualmid2.py                  # 可视化工具（五线谱）
+├── main_batch.py                  # 批量生成脚本（可选）
+├── ablation_study.py              # 🆕 消融实验脚本（完整版）
+├── quick_ablation.py              # 🆕 快速消融测试工具（交互式）
+├── clean_results.py               # 清理工具
 ├── test_system.py                 # 系统测试脚本
 ├── test_range.py                  # 音域测试脚本
+├── docs_rhythm_fitness.md         # 节奏适应度函数文档
+├── docs_pitch_fitness.md          # 音高适应度函数文档
+├── ABLATION_GUIDE.md              # 🆕 消融实验指南
+├── results/                       # 生成的MIDI文件
+│   └── plots/                     # 可视化输出
+└── requirements.txt               # Python依赖
+```
 ├── results/                       # 生成的MIDI文件存放目录
 │   ├── *.mid                      # 生成的MIDI文件
 │   └── plots/                     # 可视化图像
@@ -53,7 +65,7 @@ music_and_math/
 
 ## 使用方法
 
-### 1. 运行主程序生成音乐
+### 1. 运行主程序生成音乐（推荐）
 
 ```bash
 python main.py
@@ -71,14 +83,24 @@ python main.py
 ```
 
 程序将：
-- 运行所有节奏×音高适应度函数组合（8×13=104种）
-- 每个组合进化1024代
-- 自动保存MIDI文件到 `results/` 文件夹
+- 使用**综合适应度函数**（optimal权重组合）
+- 进化1024代
+- 生成**1个**高质量的MIDI文件到 `results/` 文件夹
 
 **输出文件命名格式**：  
-`results/output_<调式>_<节奏函数名>_<音高函数名>.mid`
+`results/output_<调式>_overall.mid`
 
-例如：`results/output_C_major_rhythm_fitness_active_pitch_fitness_stepwise.mid`
+例如：`results/output_C_major_overall.mid`
+
+### 1b. 批量生成所有组合（可选）
+
+如果你想测试所有适应度函数的不同组合（8×14=112种）：
+
+```bash
+python main_batch.py
+```
+
+⚠️ **警告**：这会生成112个文件，需要较长时间（约3-4小时）
 
 ### 2. 播放生成的音乐
 
@@ -127,45 +149,71 @@ python visualmid2.py     # 在MuseScore中打开五线谱
 
 ## 适应度函数
 
-### 节奏适应度函数（8个）
+所有适应度函数都集中在 `fitness_function_rhythm.py` 和 `fitness_function_pitch.py` 中（已精简）。
+
+### 节奏适应度函数（3个核心函数）
 
 | 函数名 | 特点 | 适合风格 |
 |--------|------|----------|
-| `rhythm_fitness_basic` | 均衡分布 | 通用 |
-| `rhythm_fitness_active` | 密集发声 | 快速、活泼 |
-| `rhythm_fitness_legato` | 长音符 | 抒情、连贯 |
-| `rhythm_fitness_syncopated` | 切分音 | 爵士、摇摆 |
+| `rhythm_fitness_basic` | 均衡分布 | 通用、自然 |
+| `rhythm_fitness_legato` | 长音符、连贯 | 抒情、流畅 |
 | `rhythm_fitness_balanced` | 避免极端 | 自然、舒适 |
-| `rhythm_fitness_sparse` | 多休止 | 留白、呼吸感 |
-| `rhythm_fitness_march` | 强拍规律 | 进行曲 |
-| `rhythm_fitness_varied` | 复杂多变 | 现代、实验 |
+| **`rhythm_fitness_overall`** | **综合加权** | **推荐默认** |
 
-### 音高适应度函数（13个）
+### 音高适应度函数（3个核心函数）
 
 | 函数名 | 特点 | 适合风格 |
 |--------|------|----------|
 | `pitch_fitness_stepwise` | 级进运动 | 流畅、易唱 |
-| `pitch_fitness_leap` | 跳跃音程 | 戏剧性 |
 | `pitch_fitness_arch` | 拱形轮廓 | 经典乐句 |
-| `pitch_fitness_wave` | 波浪起伏 | 动感 |
-| `pitch_fitness_narrow_range` | 窄音域 | 平和、内敛 |
-| `pitch_fitness_wide_range` | 宽音域 | 展现音域 |
 | `pitch_fitness_end_tonic` | 结束主音 | 传统终止 |
-| `pitch_fitness_avoid_repetition` | 避免重复 | 现代风格 |
-| `pitch_fitness_variety` | 音高多样 | 丰富多彩 |
-| `pitch_fitness_ascending` | 上行趋势 | 积极向上 |
-| `pitch_fitness_descending` | 下行趋势 | 舒缓放松 |
-| `pitch_fitness_center_focus` | 中心音 | 稳定回旋 |
-| `pitch_fitness_pentatonic_feel` | 五声音阶 | 民族风格 |
+| **`pitch_fitness_overall`** | **综合加权** | **推荐默认** |
 
 ## 遗传算法参数
 
-- **种群大小**：200
-- **最大代数**：1024
-- **精英保留**：2个
-- **交叉概率**：70%
-- **变异概率**：5%
-- **特殊变换概率**：3%
+所有超参数都集中在 `config.py` 中，可以方便地修改：
+
+### 核心参数
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `POP_SIZE` | 200 | 种群大小 |
+| `MAX_GEN` | 1024 | 最大代数 |
+| `ELITISM_COUNT` | 2 | 精英保留数量 |
+| `CROSSOVER_RATE` | 0.7 | 交叉概率 |
+| `MUTATION_RATE` | 0.05 | 变异概率 |
+| `TRANSFORM_RATE` | 0.03 | 特殊变换概率 |
+| `MIDI_TEMPO` | 120 | MIDI速度(BPM) |
+
+### 快速配置模式
+
+在 `config.py` 中设置 `CONFIG_MODE`：
+
+```python
+CONFIG_MODE = 'default'       # 默认模式
+# CONFIG_MODE = 'quick_test'  # 快速测试（50个体，256代）
+# CONFIG_MODE = 'high_quality' # 高质量（500个体，2048代）
+```
+
+### 自定义权重
+
+修改 `config.py` 中的权重来调整音乐风格：
+
+```python
+# 节奏权重（精简版）
+RHYTHM_WEIGHTS = {
+    'basic': 1.5,        # 增加这个值让节奏更平衡
+    'legato': 1.2,       # 增加这个值让音符更长
+    'balanced': 1.0,     # 增加这个值避免极端
+}
+
+# 音高权重（精简版）
+PITCH_WEIGHTS = {
+    'stepwise': 2.0,     # 增加这个值让旋律更平滑
+    'arch': 1.5,         # 增加这个值强化拱形轮廓
+    'end_tonic': 1.5,    # 增加这个值强化终止感
+}
+```
 
 ## 自定义适应度函数
 

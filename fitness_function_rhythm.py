@@ -1,17 +1,28 @@
 """
-节奏适应度函数库
-Rhythm Fitness Functions
+节奏适应度函数库（精简版）
+Rhythm Fitness Functions (Simplified)
 
-每个函数接收一个 MelodyAdapter 对象，该对象包含：
-- melody.rhythm_genes: 长度16的节奏基因列表
-  [0=休止符, 1=发声, 2=延长]
-- melody.notes: 解码后的音符列表 [(pitch, start_time, duration), ...]
+只保留3个最核心的节奏函数：
+1. rhythm_fitness_basic - 基础平衡
+2. rhythm_fitness_legato - 连贯流畅  
+3. rhythm_fitness_balanced - 均衡自然
 """
+
+# 导入配置
+try:
+    from config import RHYTHM_WEIGHTS
+except ImportError:
+    RHYTHM_WEIGHTS = {
+        'basic': 1.5,
+        'legato': 1.2,
+        'balanced': 1.0,
+    }
+
 
 def rhythm_fitness_basic(melody):
     """
-    基础节奏评分：鼓励多样性
-    适合：均衡的节奏模式
+    基础平衡节奏
+    创建平衡、自然的节奏模式
     """
     rhythm = melody.rhythm_genes
     score = 0
@@ -32,36 +43,10 @@ def rhythm_fitness_basic(melody):
     return score
 
 
-def rhythm_fitness_active(melody):
-    """
-    活跃节奏：鼓励更多发声
-    适合：快速、密集的音乐风格
-    """
-    rhythm = melody.rhythm_genes
-    score = 0
-    
-    note_count = rhythm.count(1)
-    rest_count = rhythm.count(0)
-    
-    # 高密度音符
-    score += note_count * 15
-    # 惩罚过多休止
-    score -= rest_count * 10
-    
-    # 奖励连续的音符
-    consecutive_notes = 0
-    for i in range(len(rhythm) - 1):
-        if rhythm[i] == 1 and rhythm[i+1] == 1:
-            consecutive_notes += 1
-    score += consecutive_notes * 5
-    
-    return score
-
-
 def rhythm_fitness_legato(melody):
     """
-    连贯节奏：鼓励长音符（更多HOLD）
-    适合：抒情、连贯的旋律
+    连贯流畅节奏
+    鼓励长音符、连贯的节奏，适合抒情音乐
     """
     rhythm = melody.rhythm_genes
     score = 0
@@ -88,37 +73,10 @@ def rhythm_fitness_legato(melody):
     return score
 
 
-def rhythm_fitness_syncopated(melody):
-    """
-    切分节奏：鼓励强弱位对比
-    适合：爵士、摇摆风格
-    """
-    rhythm = melody.rhythm_genes
-    score = 0
-    
-    # 检查强拍位置（0, 4, 8, 12 是每拍的开始）
-    strong_beats = [0, 4, 8, 12]
-    weak_beats = [1, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14, 15]
-    
-    # 弱拍上有音符（切分音）
-    syncopation = 0
-    for pos in weak_beats:
-        if rhythm[pos] == 1:
-            syncopation += 1
-    score += syncopation * 10
-    
-    # 强拍上的休止（反常规）
-    for pos in strong_beats:
-        if rhythm[pos] == 0:
-            score += 15
-    
-    return score
-
-
 def rhythm_fitness_balanced(melody):
     """
-    平衡节奏：避免极端
-    适合：自然、舒适的节奏感
+    均衡自然节奏
+    避免极端，创造最自然、平衡的节奏
     """
     rhythm = melody.rhythm_genes
     score = 0
@@ -148,123 +106,16 @@ def rhythm_fitness_balanced(melody):
     return score
 
 
-def rhythm_fitness_sparse(melody):
-    """
-    稀疏节奏：鼓励更多休止符
-    适合：留白、呼吸感强的音乐
-    """
-    rhythm = melody.rhythm_genes
-    score = 0
-    
-    rest_count = rhythm.count(0)
-    note_count = rhythm.count(1)
-    
-    # 鼓励休止符
-    score += rest_count * 15
-    
-    # 惩罚过密
-    if note_count > 6:
-        score -= (note_count - 6) * 10
-    
-    # 鼓励休止符分散在不同位置
-    rest_positions = [i for i, r in enumerate(rhythm) if r == 0]
-    if len(rest_positions) >= 2:
-        # 计算休止符之间的间距
-        gaps = [rest_positions[i+1] - rest_positions[i] for i in range(len(rest_positions)-1)]
-        avg_gap = sum(gaps) / len(gaps) if gaps else 0
-        if avg_gap >= 3:  # 休止符分散开
-            score += 30
-    
-    return score
-
-
-def rhythm_fitness_march(melody):
-    """
-    进行曲节奏：强调强拍
-    适合：庄严、有力的风格
-    """
-    rhythm = melody.rhythm_genes
-    score = 0
-    
-    # 强拍位置（每拍开始）
-    strong_beats = [0, 4, 8, 12]
-    
-    # 强拍上应该有音符
-    for pos in strong_beats:
-        if rhythm[pos] == 1:
-            score += 30
-        elif rhythm[pos] == 2:  # 延长也可以
-            score += 15
-    
-    # 鼓励规律的节奏模式
-    # 检查是否有重复的4拍模式
-    pattern1 = rhythm[0:4]
-    pattern2 = rhythm[4:8]
-    pattern3 = rhythm[8:12]
-    pattern4 = rhythm[12:16]
-    
-    if pattern1 == pattern2 or pattern2 == pattern3 or pattern3 == pattern4:
-        score += 40
-    
-    return score
-
-
-def rhythm_fitness_varied(melody):
-    """
-    变化节奏：鼓励复杂的节奏组合
-    适合：现代、实验性音乐
-    """
-    rhythm = melody.rhythm_genes
-    score = 0
-    
-    # 检查所有2音符子序列的多样性
-    pairs = [tuple(rhythm[i:i+2]) for i in range(len(rhythm)-1)]
-    unique_pairs = len(set(pairs))
-    score += unique_pairs * 10
-    
-    # 检查所有3音符子序列的多样性
-    triplets = [tuple(rhythm[i:i+3]) for i in range(len(rhythm)-2)]
-    unique_triplets = len(set(triplets))
-    score += unique_triplets * 8
-    
-    # 避免长重复
-    for i in range(len(rhythm) - 3):
-        if rhythm[i] == rhythm[i+1] == rhythm[i+2] == rhythm[i+3]:
-            score -= 20
-    
-    return score
-
-
 def rhythm_fitness_overall(melody):
     """
-    综合节奏适应度：多个节奏函数的加权组合
-    这是推荐的默认节奏评分函数
+    综合节奏适应度（精简版）
+    结合3个核心函数的加权组合
     """
     score = 0
     
-    # 基础平衡性 (权重: 1.5)
-    score += rhythm_fitness_basic(melody) * 1.5
-    
-    # 适度活跃 (权重: 1.0)
-    score += rhythm_fitness_active(melody) * 1.0
-    
-    # 连贯性 (权重: 1.2)
-    score += rhythm_fitness_legato(melody) * 1.2
-    
-    # 少量切分 (权重: 0.5)
-    score += rhythm_fitness_syncopated(melody) * 0.5
-    
-    # 避免极端 (权重: 1.0)
-    score += rhythm_fitness_balanced(melody) * 1.0
-    
-    # 轻微稀疏感 (权重: 0.3)
-    score += rhythm_fitness_sparse(melody) * 0.3
-    
-    # 规律感 (权重: 0.8)
-    score += rhythm_fitness_march(melody) * 0.8
-    
-    # 变化性 (权重: 0.7)
-    score += rhythm_fitness_varied(melody) * 0.7
+    score += rhythm_fitness_basic(melody) * RHYTHM_WEIGHTS['basic']
+    score += rhythm_fitness_legato(melody) * RHYTHM_WEIGHTS['legato']
+    score += rhythm_fitness_balanced(melody) * RHYTHM_WEIGHTS['balanced']
     
     return score
 
@@ -275,15 +126,9 @@ def rhythm_fitness_overall(melody):
 
 rhythm_fitness_funcs = [
     rhythm_fitness_basic,
-    rhythm_fitness_active,
     rhythm_fitness_legato,
-    rhythm_fitness_syncopated,
     rhythm_fitness_balanced,
-    rhythm_fitness_sparse,
-    rhythm_fitness_march,
-    rhythm_fitness_varied,
-    rhythm_fitness_overall,  # 综合函数
+    rhythm_fitness_overall,
 ]
 
-print(f"✓ 已加载 {len(rhythm_fitness_funcs)} 个节奏适应度函数（含1个综合函数）")
-
+print(f"✓ 已加载 {len(rhythm_fitness_funcs)} 个节奏适应度函数（精简版）")
