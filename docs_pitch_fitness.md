@@ -1,29 +1,23 @@
 # 音高适应度函数详解
 
-本文档详细介绍所有音高适应度函数的作用、原理和音乐效果。
+本文档详细介绍当前系统中所有音高适应度函数的作用、原理和音乐效果。
+
+**当前版本：5个音高适应度函数**
 
 ---
 
 ## 目录
 
-1. [pitch_fitness_stepwise](#1-pitch_fitness_stepwise---级进旋律)
-2. [pitch_fitness_leap](#2-pitch_fitness_leap---跳跃旋律)
-3. [pitch_fitness_arch](#3-pitch_fitness_arch---拱形轮廓)
-4. [pitch_fitness_wave](#4-pitch_fitness_wave---波浪起伏)
-5. [pitch_fitness_narrow_range](#5-pitch_fitness_narrow_range---窄音域)
-6. [pitch_fitness_wide_range](#6-pitch_fitness_wide_range---宽音域)
-7. [pitch_fitness_end_tonic](#7-pitch_fitness_end_tonic---结束主音)
-8. [pitch_fitness_avoid_repetition](#8-pitch_fitness_avoid_repetition---避免重复)
-9. [pitch_fitness_variety](#9-pitch_fitness_variety---音高多样性)
-10. [pitch_fitness_ascending](#10-pitch_fitness_ascending---上行旋律)
-11. [pitch_fitness_descending](#11-pitch_fitness_descending---下行旋律)
-12. [pitch_fitness_center_focus](#12-pitch_fitness_center_focus---中心音聚焦)
-13. [pitch_fitness_pentatonic_feel](#13-pitch_fitness_pentatonic_feel---五声音阶感)
-14. [pitch_fitness_overall](#14-pitch_fitness_overall---综合音高推荐)
+1. [pitch_fitness_stepwise](#1-pitch_fitness_stepwise---级进流畅)
+2. [pitch_fitness_consonance](#2-pitch_fitness_consonance---音程协和度)
+3. [pitch_fitness_range](#3-pitch_fitness_range---音域平衡)
+4. [pitch_fitness_direction](#4-pitch_fitness_direction---旋律方向变化)
+5. [pitch_fitness_climax](#5-pitch_fitness_climax---旋律高潮)
+6. [pitch_fitness_overall](#6-pitch_fitness_overall---综合音高适应度)
 
 ---
 
-## 1. pitch_fitness_stepwise - 级进旋律
+## 1. pitch_fitness_stepwise - 级进流畅
 
 ### 作用
 创造流畅、易唱的旋律，相邻音符以小音程连接。
@@ -40,13 +34,16 @@ for i in range(len(pitches) - 1):
         score += 5
     else:                  # 大跳 → -10分
         score -= 10
+
+# 归一化：除以音程数量
+normalized_score = score / num_intervals
 ```
 
 ### 音乐特征
 - ✅ 相邻音符距离近
 - ✅ 容易演唱
 - ✅ 流畅自然
-- ❌ 可能缺少戏剧性
+- ⚠️ 可能缺少戏剧性
 
 ### 音程分类
 
@@ -57,6 +54,12 @@ for i in range(len(pitches) - 1):
 | 小三度 | 3 | +5 | C→Eb |
 | 大三度 | 4 | +5 | C→E |
 | 纯四度+ | 5+ | -10 | C→F及以上 |
+
+### 归一化说明
+
+- **关键改进**：得分除以音程数量，避免音符数量影响得分
+- 8个音符和16个音符如果都是级进，得分相同（都约20分）
+- 体现的是**音程质量**而非数量
 
 ### 适用场景
 - 民歌
@@ -69,629 +72,328 @@ for i in range(len(pitches) - 1):
 C → D → E → F → E → D → C
 60→62→64→65→64→62→60
 +2 +2 +1 -1 -2 -2  (都是小音程，流畅)
+归一化得分: (20+20+20+20+20+20)/6 ≈ 20分
 ```
 
 ---
 
-## 2. pitch_fitness_leap - 跳跃旋律
+## 2. pitch_fitness_consonance - 音程协和度
 
 ### 作用
-创造富有张力、戏剧性的跳跃旋律。
+根据音乐理论，评估相邻音符之间音程的协和程度，鼓励使用协和音程。
 
 ### 评分规则
 
 ```python
 for i in range(len(pitches) - 1):
     interval = abs(pitches[i] - pitches[i+1])
+    interval_class = interval % 12  # 归约到一个八度内
     
-    if interval >= 5:      # 纯四度及以上 → +25分
-        score += 25
-    elif interval >= 3:    # 小三度及以上 → +10分
+    if interval == 0:              # 相邻音符相同 → -15分 (惩罚重复)
+        score -= 15
+    elif interval == 12:           # 纯八度 → +12分
+        score += 12
+    elif interval_class == 7:      # 纯五度 → +12分
+        score += 12
+    elif interval_class == 5:      # 纯四度 → +12分
+        score += 12
+    elif interval_class in [3, 4]: # 小/大三度 → +12分
+        score += 12
+    elif interval_class in [8, 9]: # 小/大六度 → +10分
         score += 10
-    else:                  # 级进 → -5分
+    elif interval_class == 2:      # 大二度 → +5分
+        score += 5
+    elif interval_class == 1:      # 小二度 → -5分
         score -= 5
+    elif interval_class == 6:      # 三全音 → -10分
+        score -= 10
+    elif interval_class in [10, 11]: # 小/大七度 → -5/-10分
+        score -= 5 或 -10
+
+# 归一化
+normalized_score = score / num_intervals
 ```
+
+### 音程协和度分类
+
+| 音程类型 | 半音数 | 评分 | 协和性 |
+|---------|--------|------|--------|
+| **重复音** | 0 | **-15** | ❌ 单调 |
+| **纯八度** | 12 | +12 | ⭐⭐⭐ |
+| **纯五度** | 7 | +12 | ⭐⭐⭐ |
+| **纯四度** | 5 | +12 | ⭐⭐⭐ |
+| **大/小三度** | 3-4 | +12 | ⭐⭐⭐ |
+| **大/小六度** | 8-9 | +10 | ⭐⭐ |
+| **大二度** | 2 | +5 | ⭐ |
+| **小二度** | 1 | -5 | ❌ |
+| **三全音** | 6 | -10 | ❌❌ |
+| **七度** | 10-11 | -5/-10 | ❌ |
+
+### 设计理念
+
+**平衡评分**：
+- 所有主要协和音程（八度、五度、四度、三度）得分相同（12分）
+- 避免遗传算法只选择某一种音程
+- 惩罚重复音（-15分），鼓励旋律变化
 
 ### 音乐特征
-- ✅ 音程跨度大
-- ✅ 戏剧性强
-- ✅ 引人注目
-- ❌ 较难演唱
-
-### 音程分类
-
-| 音程 | 半音数 | 评分 | 示例 |
-|------|--------|------|------|
-| 纯四度+ | 5+ | +25 | C→F, C→G |
-| 小/大三度 | 3-4 | +10 | C→E |
-| 大二度以下 | ≤2 | -5 | C→D |
-
-### 适用场景
-- 歌剧咏叹调
-- 炫技段落
-- 戏剧性配乐
-- 器乐独奏
+- ✅ 音程协和悦耳
+- ✅ 音响效果好
+- ✅ 避免单调重复
+- ⚠️ 可能有跳跃
 
 ### 示例旋律
+
+**协和旋律（高分）：**
 ```
-C → G → E → C → A → F → D
-60→67→64→60→69→65→62
-+7 -3 -4 +9 -4 -3  (大跳多，戏剧性强)
+C → E → G → C' (三和弦分解)
+60→64→67→72
++4(大三度,+12) +3(小三度,+12) +5(纯四度,+12)
+平均得分: 12分
 ```
+
+**不协和旋律（低分）：**
+```
+C → C# → D → D# (半音阶)
+60→61→62→63
++1(小二度,-5) +1(-5) +1(-5)
+平均得分: -5分
+```
+
+### 适用场景
+- 和声为主的音乐
+- 三和弦分解
+- 跳跃旋律
+- 器乐作品
 
 ---
 
-## 3. pitch_fitness_arch - 拱形轮廓
+## 3. pitch_fitness_range - 音域平衡
 
 ### 作用
-创造经典的拱形乐句：前半上升，后半下降，中间最高。
+评估旋律的音域范围是否适中，避免过窄（单调）或过宽（难唱）。
 
 ### 评分规则
 
 ```python
-mid = len(pitches) // 2
+pitches = [n[0] for n in melody.notes]
+pitch_range = max(pitches) - min(pitches)  # 最高音 - 最低音
 
-# 前半段奖励上升
-for i in range(mid - 1):
-    if pitches[i+1] >= pitches[i]:
-        score += 15
+if pitch_range < 6:              # 太窄（<半个八度）→ -10分
+    score = -10
+elif 6 <= pitch_range <= 18:    # 适中（0.5-1.5个八度）→ +20分
+    score = 20
+else:                            # 太宽（>1.5个八度）→ -5分
+    score = -5
+```
 
-# 后半段奖励下降
-for i in range(mid, len(pitches) - 1):
-    if pitches[i+1] <= pitches[i]:
-        score += 15
+### 音域分类
 
-# 中点是最高点
-if pitches[mid] == max(pitches):
-    score += 50
+| 音域（半音数） | 八度数 | 评分 | 说明 |
+|--------------|--------|------|------|
+| <6 | <0.5 | -10 | 太窄，单调 |
+| 6-12 | 0.5-1.0 | +20 | ✅ 理想 |
+| 13-18 | 1.0-1.5 | +20 | ✅ 理想 |
+| >18 | >1.5 | -5 | 太宽，难唱 |
+
+### 音乐特征
+- ✅ 音域适中
+- ✅ 易于演唱
+- ✅ 自然舒适
+- ⚠️ 限制音域范围
+
+### 示例
+
+**适中音域（+20分）：**
+```
+音域: C4(60) ~ E5(76) = 16个半音 ✓
+旋律: C4 → G4 → E5 → A4 → C4
+     60 → 67 → 76 → 69 → 60
+```
+
+**太窄音域（-10分）：**
+```
+音域: C4(60) ~ E4(64) = 4个半音 ✗
+旋律: C4 → D4 → E4 → D4 → C4
+     60 → 62 → 64 → 62 → 60
+```
+
+### 适用场景
+- 歌曲创作
+- 限制音域要求
+- 平衡音乐
+- 自然旋律
+
+---
+
+## 4. pitch_fitness_direction - 旋律方向变化
+
+### 作用
+评估旋律的方向变化是否丰富，鼓励起伏变化，避免单一方向。
+
+### 评分规则
+
+```python
+# 1. 计算每个音程的方向
+directions = []
+for i in range(len(pitches) - 1):
+    diff = pitches[i+1] - pitches[i]
+    if diff > 0:
+        directions.append(1)   # 上行
+    elif diff < 0:
+        directions.append(-1)  # 下行
+    else:
+        directions.append(0)   # 持平
+
+# 2. 统计方向变化次数
+direction_changes = 0
+for i in range(len(directions) - 1):
+    if directions[i] != 0 and directions[i+1] != 0:
+        if directions[i] != directions[i+1]:
+            direction_changes += 1
+
+# 3. 归一化
+change_ratio = direction_changes / (len(directions) - 1)
+score = change_ratio * 20  # 满分20
+```
+
+### 方向变化示例
+
+**多变化（高分）：**
+```
+C → E → D → F → E → G → F
+60→64→62→65→64→67→65
+ ↗  ↘  ↗  ↘  ↗  ↘
+3次方向变化，变化率 = 3/5 = 60%
+得分: 0.6 × 20 = 12分
+```
+
+**单一方向（低分）：**
+```
+C → D → E → F → G → A
+60→62→64→65→67→69
+ ↗  ↗  ↗  ↗  ↗
+0次方向变化，变化率 = 0%
+得分: 0分
+```
+
+### 音乐特征
+- ✅ 旋律起伏丰富
+- ✅ 避免单调
+- ✅ 有变化
+- ⚠️ 过多变化可能不流畅
+
+### 适用场景
+- 装饰性旋律
+- 活泼段落
+- 变奏曲
+- 丰富旋律线
+
+---
+
+## 5. pitch_fitness_climax - 旋律高潮
+
+### 作用
+评估旋律是否有明显的高潮点（最高音或最低音在中间），避免开头或结尾就是极值。
+
+### 评分规则
+
+```python
+pitches = [n[0] for n in melody.notes]
+n = len(pitches)
+
+# 找到最高音和最低音的位置
+max_pitch_idx = pitches.index(max(pitches))
+min_pitch_idx = pitches.index(min(pitches))
+
+score = 0
+
+# 最高音不在开头或结尾
+if 0 < max_pitch_idx < n - 1:
+    score += 12.5
+
+# 最低音不在开头或结尾
+if 0 < min_pitch_idx < n - 1:
+    score += 12.5
+
+# 满分: 25分
+```
+
+### 高潮点位置
+
+| 情况 | 得分 | 说明 |
+|------|------|------|
+| 最高音和最低音都在中间 | 25分 | ✅ 最优 |
+| 只有最高音在中间 | 12.5分 | ⚠️ 一般 |
+| 只有最低音在中间 | 12.5分 | ⚠️ 一般 |
+| 极值在开头或结尾 | 0分 | ❌ 平淡 |
+
+### 示例
+
+**有高潮（+25分）：**
+```
+位置: 0   1   2   3   4   5   6   7
+音高: C4  E4  G4  C5  A4  F4  D4  C4
+     60  64  67  72  69  65  62  60
+              最高↑
+最高音在位置3（中间）✓
+最低音在位置0和7（两端）
+得分: 12.5分
+```
+
+**无高潮（0分）：**
+```
+位置: 0   1   2   3   4   5
+音高: C5  A4  G4  E4  D4  C4
+     72  69  67  64  62  60
+    最高↑
+最高音在开头，无高潮感
+得分: 0分
 ```
 
 ### 音乐特征
 - ✅ 有明确的高潮点
 - ✅ 张弛有度
-- ✅ 符合自然呼吸
-- ✅ 经典乐句结构
-
-### 轮廓示例
-
-```
-音高
- ^
- |      ●●●
- |    ●     ●
- |  ●         ●
- |●             ●
- +----------------> 时间
-  前半上升  后半下降
-```
+- ✅ 结构感强
+- ⚠️ 可能过于规整
 
 ### 适用场景
-- 古典音乐
-- 艺术歌曲
 - 主题旋律
-- 乐句结构
-
-### 示例旋律
-```
-C → D → E → G → A → G → E → D → C
-60→62→64→67→69→67→64→62→60
-    上升     ↑   下降
-          高潮点
-```
-
----
-
-## 4. pitch_fitness_wave - 波浪起伏
-
-### 作用
-创造上下起伏、富有动感的旋律线条。
-
-### 评分规则
-
-```python
-# 检测方向变化（峰值和谷值）
-direction_changes = 0
-for i in range(1, len(pitches) - 1):
-    # 峰值：比前后都高
-    is_peak = pitches[i] > pitches[i-1] and pitches[i] > pitches[i+1]
-    # 谷值：比前后都低
-    is_valley = pitches[i] < pitches[i-1] and pitches[i] < pitches[i+1]
-    
-    if is_peak or is_valley:
-        direction_changes += 1
-
-# 最佳：2-4次方向变化
-if 2 <= direction_changes <= 4:
-    score += 100
-else:
-    score += direction_changes * 10
-```
-
-### 音乐特征
-- ✅ 频繁转向
-- ✅ 富有动感
-- ✅ 不单调
-- ⚠️ 需控制变化频率
-
-### 轮廓示例
-
-```
-音高
- ^    ●       ●
- |  ●   ●   ●   ●
- |        ●       ●
- +-------------------> 时间
-  峰谷交替，波浪起伏
-```
-
-### 适用场景
-- 装饰性旋律
-- 器乐作品
-- 活泼的段落
-- 变奏曲
-
-### 示例旋律
-```
-C → E → D → F → E → G → F → D
-60→64→62→65→64→67→65→62
- ↗  ↘  ↗  ↘  ↗  ↘  
-峰 谷 峰 谷 峰（3次变化）
-```
-
----
-
-## 5. pitch_fitness_narrow_range - 窄音域
-
-### 作用
-将旋律限制在小范围内，创造平和、内敛的效果。
-
-### 评分规则
-
-```python
-pitch_range = max(pitches) - min(pitches)
-
-if pitch_range <= 5:      # ≤纯四度 → +100分
-    score += 100
-elif pitch_range <= 7:    # ≤纯五度 → +50分
-    score += 50
-else:
-    score -= (pitch_range - 7) * 10  # 每超1个半音 -10分
-```
-
-### 音乐特征
-- ✅ 音域集中
-- ✅ 平和安静
-- ✅ 易于演唱
-- ❌ 可能单调
-
-### 音域示例
-
-```
-窄音域 (5个半音)
-┌────────┐
-C  D  E  F  G
-60 62 64 65 67
-```
-
-### 适用场景
-- 冥想音乐
-- 背景音乐
-- 儿童歌曲
-- 简单旋律
-
-### 示例旋律
-```
-C → D → E → D → C → E → F → E → D → C
-60→62→64→62→60→64→65→64→62→60
-音域：60-65 (5个半音) ✓
-```
-
----
-
-## 6. pitch_fitness_wide_range - 宽音域
-
-### 作用
-鼓励使用宽广音域，展现演唱/演奏技巧。
-
-### 评分规则
-
-```python
-pitch_range = max(pitches) - min(pitches)
-
-if pitch_range >= 12:     # ≥八度 → +100分
-    score += 100
-elif pitch_range >= 7:    # ≥纯五度 → +50分
-    score += 50
-else:
-    score -= (7 - pitch_range) * 10  # 音域太窄扣分
-```
-
-### 音乐特征
-- ✅ 音域宽广
-- ✅ 展现音域
-- ✅ 戏剧性强
-- ❌ 技术要求高
-
-### 音域示例
-
-```
-宽音域 (12+个半音)
-┌────────────────────────┐
-C3         C4         C5
-48         60         72
-低音区     中音区     高音区
-```
-
-### 适用场景
-- 歌剧
-- 炫技作品
-- 器乐独奏
-- 展现技巧
-
-### 示例旋律
-```
-C3 → C4 → G4 → C5 → G3
-48 → 60 → 67 → 72 → 55
-音域：48-72 (24个半音，2个八度) ✓
-```
-
----
-
-## 7. pitch_fitness_end_tonic - 结束主音
-
-### 作用
-让旋律结束在主音上，创造完满的终止感。
-
-### 评分规则
-
-```python
-last_pitch_gene = melody.pitch_genes[-1]
-relative_position = last_pitch_gene % 7
-
-if relative_position == 0:    # 主音 → +100分
-    return 100
-elif relative_position == 2:  # 三音 → +50分
-    return 50
-elif relative_position == 4:  # 五音 → +30分
-    return 30
-else:
-    return -20                 # 其他音 → -20分
-```
-
-### 音乐特征
-- ✅ 终止感强
-- ✅ 符合传统和声
-- ✅ 稳定、完满
-- ⚠️ 过于传统
-
-### 调式音级
-
-```
-C大调示例：
-音级: 1   2   3   4   5   6   7
-音名: C   D   E   F   G   A   B
-位置: 0   1   2   3   4   5   6
-
-结束在：
-- 1级(C) → 最稳定 +100
-- 3级(E) → 较稳定 +50
-- 5级(G) → 可接受 +30
-```
-
-### 适用场景
-- 古典音乐
-- 传统和声
 - 完整乐句
-- 主题旋律
-
-### 示例
-```
-...F → E → D → C
-   65→64→62→60
-           结束在主音C ✓
-```
+- 经典结构
+- 抒情段落
 
 ---
 
-## 8. pitch_fitness_avoid_repetition - 避免重复
+## 6. pitch_fitness_overall - 综合音高适应度
 
 ### 作用
-惩罚相同音高连续出现，追求变化。
+将所有音高适应度函数的得分相加，得到综合评价。
 
-### 评分规则
+### 计算方式
 
 ```python
-for i in range(len(pitches) - 1):
-    if pitches[i] == pitches[i+1]:
-        score -= 15  # 重复 → -15分
-    else:
-        score += 5   # 变化 → +5分
+def pitch_fitness_overall(melody):
+    total_score = 0
+    
+    # 根据权重决定是否计算每个函数
+    if PITCH_WEIGHTS.get('stepwise', 0) != 0:
+        total_score += pitch_fitness_stepwise(melody)
+    
+    if PITCH_WEIGHTS.get('consonance', 0) != 0:
+        total_score += pitch_fitness_consonance(melody)
+    
+    if PITCH_WEIGHTS.get('range', 0) != 0:
+        total_score += pitch_fitness_range(melody)
+    
+    if PITCH_WEIGHTS.get('direction', 0) != 0:
+        total_score += pitch_fitness_direction(melody)
+    
+    if PITCH_WEIGHTS.get('climax', 0) != 0:
+        total_score += pitch_fitness_climax(melody)
+    
+    return total_score
 ```
-
-### 音乐特征
-- ✅ 音高多变
-- ✅ 避免单调
-- ✅ 现代感
-- ❌ 可能失去歌唱性
-
-### 对比
-
-```
-有重复（扣分）：
-C → C → C → D → E
-60→60→60→62→64
-   ↓  ↓
-  重复 重复
-
-无重复（加分）：
-C → D → E → F → G
-60→62→64→65→67
-每个音都不同 ✓
-```
-
-### 适用场景
-- 现代音乐
-- 器乐作品
-- 快速乐段
-- 追求变化
-
----
-
-## 9. pitch_fitness_variety - 音高多样性
-
-### 作用
-鼓励使用更多不同的音高。
-
-### 评分规则
-
-```python
-unique_pitches = len(set(melody.pitch_genes))
-
-if unique_pitches >= 8:    # 8种以上 → +120分
-    return 120
-elif unique_pitches >= 5:  # 5-7种 → +100分
-    return 100
-elif unique_pitches >= 4:  # 4种 → +50分
-    return 50
-else:
-    return unique_pitches * 10
-```
-
-### 音乐特征
-- ✅ 色彩丰富
-- ✅ 音高多样
-- ✅ 不单调
-- ⚠️ 需控制使用
-
-### 多样性示例
-
-```
-低多样性（3种音）：
-C → D → C → D → C → D → C
-60→62→60→62→60→62→60
-只用了C和D（单调）
-
-高多样性（7种音）：
-C → D → E → F → G → A → B → C
-60→62→64→65→67→69→71→72
-使用了完整音阶 ✓
-```
-
-### 适用场景
-- 变奏曲
-- 展开部
-- 完整旋律
-- 丰富音色
-
----
-
-## 10. pitch_fitness_ascending - 上行旋律
-
-### 作用
-创造整体向上的旋律，表达积极情绪。
-
-### 评分规则
-
-```python
-# 起点低于终点
-if pitches[-1] > pitches[0]:
-    score += 50
-
-# 统计上行音程
-ascending = 0
-for i in range(len(pitches) - 1):
-    if pitches[i+1] > pitches[i]:
-        ascending += 1
-
-score += ascending * 15
-```
-
-### 音乐特征
-- ✅ 整体上升
-- ✅ 积极向上
-- ✅ 激昂情绪
-- ⚠️ 需要音域支持
-
-### 上行示例
-
-```
-音高
- ^
- |             ●
- |          ●
- |       ●
- |    ●
- | ●
- +----------------> 时间
-  整体趋势向上
-
-C → D → E → G → A → C
-60→62→64→67→69→72
-  整体上升 +7个半音
-```
-
-### 适用场景
-- 高潮前
-- 激动情绪
-- 问句
-- 推进段落
-
----
-
-## 11. pitch_fitness_descending - 下行旋律
-
-### 作用
-创造整体向下的旋律，表达舒缓情绪。
-
-### 评分规则
-
-```python
-# 终点低于起点
-if pitches[-1] < pitches[0]:
-    score += 50
-
-# 统计下行音程
-descending = 0
-for i in range(len(pitches) - 1):
-    if pitches[i+1] < pitches[i]:
-        descending += 1
-
-score += descending * 15
-```
-
-### 音乐特征
-- ✅ 整体下降
-- ✅ 舒缓放松
-- ✅ 安静收尾
-- ⚠️ 可能显得消极
-
-### 下行示例
-
-```
-音高
- ^
- | ●
- |    ●
- |       ●
- |          ●
- |             ●
- +----------------> 时间
-  整体趋势向下
-
-C → A → G → E → D → C
-72→69→67→64→62→60
-  整体下降 -12个半音
-```
-
-### 适用场景
-- 尾声
-- 平静段落
-- 答句
-- 结束部分
-
----
-
-## 12. pitch_fitness_center_focus - 中心音聚焦
-
-### 作用
-让旋律围绕某个中心音运动，创造稳定感。
-
-### 评分规则
-
-```python
-# 找出最常出现的音高
-most_common_pitch, count = Counter(pitch_genes).most_common(1)[0]
-
-# 出现频率高
-if count >= 4:
-    score += count * 15
-
-# 中心音是重要音级
-relative_position = most_common_pitch % 7
-if relative_position in [0, 2, 4]:  # 主音、三音或五音
-    score += 50
-```
-
-### 音乐特征
-- ✅ 有中心点
-- ✅ 稳定回旋
-- ✅ 调性明确
-- ⚠️ 可能重复
-
-### 中心音示例
-
-```
-围绕G音运动：
-E → G → F → G → A → G → F → G
-64→67→65→67→69→67→65→67
-    ↑     ↑     ↑     ↑
-   中心  中心  中心  中心
-G音出现4次，是旋律中心
-```
-
-### 适用场景
-- 回旋曲
-- 民歌
-- 持续低音风格
-- 调式音乐
-
----
-
-## 13. pitch_fitness_pentatonic_feel - 五声音阶感
-
-### 作用
-避免半音进行，创造五声音阶（民族音乐）风格。
-
-### 评分规则
-
-```python
-# 惩罚半音进行
-semitone_count = 0
-for i in range(len(pitches) - 1):
-    if abs(pitches[i] - pitches[i+1]) == 1:
-        semitone_count += 1
-score -= semitone_count * 20
-
-# 奖励全音和三度进行
-for i in range(len(pitches) - 1):
-    interval = abs(pitches[i] - pitches[i+1])
-    if interval in [2, 4]:  # 全音或大三度
-        score += 10
-```
-
-### 音乐特征
-- ✅ 避免半音
-- ✅ 民族风格
-- ✅ 简朴自然
-- ✅ 五声色彩
-
-### 音程对比
-
-```
-包含半音（扣分）：
-C → C# → D → D# → E
-60→61→62→63→64
-   ↓    ↓    ↓
-  半音  半音  半音
-
-五声感（加分）：
-C → D → E → G → A → C
-60→62→64→67→69→72
-   全音 全音 小三度 全音 小三度
-```
-
-### 适用场景
-- 中国民乐
-- 亚洲音乐
-- 民族风格
-- 简朴旋律
-
----
-
-## 14. pitch_fitness_overall - 综合音高（推荐）
-
-### 作用
-结合多个函数的优点，生成平衡、优美的旋律。
 
 ### 权重配置
 
@@ -699,108 +401,116 @@ C → D → E → G → A → C
 
 ```python
 PITCH_WEIGHTS = {
-    'stepwise': 2.0,            # 级进为主
-    'leap': 0.5,                # 少量跳跃
-    'arch': 1.5,                # 拱形轮廓
-    'wave': 1.0,                # 波浪起伏
-    'narrow_range': 0.3,        # 窄音域
-    'wide_range': 0.5,          # 宽音域
-    'end_tonic': 1.5,           # 结束主音
-    'avoid_repetition': 1.0,    # 避免重复
-    'variety': 1.2,             # 音高多样性
-    'ascending': 0.3,           # 轻微上行
-    'descending': 0.0,          # 不强调下行
-    'center_focus': 0.5,        # 中心音
-    'pentatonic_feel': 0.8,     # 避免半音
+    'stepwise': 1.0,      # 级进流畅
+    'consonance': 1.0,    # 音程协和度
+    'range': 1.0,         # 音域平衡
+    'direction': 1.0,     # 旋律方向变化
+    'climax': 1.0,        # 旋律高潮
 }
 ```
 
-### 计算方式
+### 得分组成
 
+**示例旋律的总分计算：**
+```
+stepwise:    20分  (流畅级进)
+consonance:  12分  (协和音程)
+range:       20分  (音域适中)
+direction:   15分  (方向多变)
+climax:      12.5分 (有高潮点)
+─────────────────────
+总分:        79.5分
+```
+
+### 启用/禁用函数
+
+**启用**：权重 > 0
 ```python
-score = (
-    pitch_fitness_stepwise(melody) * 2.0 +        # 主要级进
-    pitch_fitness_leap(melody) * 0.5 +            # 少量跳跃
-    pitch_fitness_arch(melody) * 1.5 +            # 拱形轮廓
-    pitch_fitness_wave(melody) * 1.0 +            # 适度起伏
-    pitch_fitness_narrow_range(melody) * 0.3 +    # 音域平衡
-    pitch_fitness_wide_range(melody) * 0.5 +      
-    pitch_fitness_end_tonic(melody) * 1.5 +       # 完满终止
-    pitch_fitness_avoid_repetition(melody) * 1.0 + # 避免重复
-    pitch_fitness_variety(melody) * 1.2 +         # 音高丰富
-    pitch_fitness_ascending(melody) * 0.3 +       # 轻微上行
-    pitch_fitness_center_focus(melody) * 0.5 +    # 调性中心
-    pitch_fitness_pentatonic_feel(melody) * 0.8   # 避免半音
-)
+PITCH_WEIGHTS['stepwise'] = 1.0  # 启用
+```
+
+**禁用**：权重 = 0
+```python
+PITCH_WEIGHTS['stepwise'] = 0.0  # 禁用，不计算该函数
 ```
 
 ### 音乐特征
-- ✅ 以级进为主（流畅）
-- ✅ 适量跳跃（变化）
-- ✅ 拱形轮廓（结构）
-- ✅ 结束主音（完满）
 - ✅ 多方面平衡
-
-### 适用场景
-- **推荐作为默认选择**
-- 适合大多数音乐风格
-- 自然优美的旋律
+- ✅ 综合评价
+- ✅ 灵活配置
+- ✅ 适合大多数场景
 
 ### 自定义调整
 
-**想要更流畅的旋律：**
+**强调流畅性：**
 ```python
-PITCH_WEIGHTS['stepwise'] = 3.0   # 增加级进
-PITCH_WEIGHTS['leap'] = 0.2       # 减少跳跃
+PITCH_WEIGHTS['stepwise'] = 2.0    # 提高权重
+PITCH_WEIGHTS['consonance'] = 0.5  # 降低权重
 ```
 
-**想要更戏剧性的旋律：**
+**强调协和性：**
 ```python
-PITCH_WEIGHTS['leap'] = 1.5       # 增加跳跃
-PITCH_WEIGHTS['wide_range'] = 1.5 # 增加音域
-PITCH_WEIGHTS['stepwise'] = 1.0   # 减少级进
+PITCH_WEIGHTS['stepwise'] = 0.5
+PITCH_WEIGHTS['consonance'] = 2.0
 ```
 
-**想要更民族风格：**
+**只用单个函数（消融实验）：**
 ```python
-PITCH_WEIGHTS['pentatonic_feel'] = 2.0  # 强化五声
-PITCH_WEIGHTS['center_focus'] = 1.5     # 强化中心音
+PITCH_WEIGHTS = {
+    'stepwise': 1.0,      # 只启用这个
+    'consonance': 0.0,    # 其他全部禁用
+    'range': 0.0,
+    'direction': 0.0,
+    'climax': 0.0,
+}
 ```
 
 ---
 
 ## 附录A：音程表
 
-| 名称 | 半音数 | 示例(from C) | 音程性质 |
-|------|--------|--------------|----------|
-| 小二度 | 1 | C→C# | 紧张 |
-| 大二度 | 2 | C→D | 流畅 |
-| 小三度 | 3 | C→Eb | 柔和 |
-| 大三度 | 4 | C→E | 明亮 |
-| 纯四度 | 5 | C→F | 稳定 |
-| 增四/减五 | 6 | C→F# | 不稳定 |
-| 纯五度 | 7 | C→G | 和谐 |
-| 小六度 | 8 | C→Ab | 哀伤 |
-| 大六度 | 9 | C→A | 开阔 |
-| 小七度 | 10 | C→Bb | 紧张 |
-| 大七度 | 11 | C→B | 很紧张 |
-| 八度 | 12 | C→C | 完全和谐 |
+| 名称 | 半音数 | 示例(from C) | 协和度 | stepwise | consonance |
+|------|--------|------------|--------|----------|------------|
+| 重复音 | 0 | C→C | ❌ | +20 | -15 |
+| 小二度 | 1 | C→C# | ❌ | +20 | -5 |
+| 大二度 | 2 | C→D | ⭐ | +20 | +5 |
+| 小三度 | 3 | C→Eb | ⭐⭐ | +5 | +12 |
+| 大三度 | 4 | C→E | ⭐⭐ | +5 | +12 |
+| 纯四度 | 5 | C→F | ⭐⭐⭐ | -10 | +12 |
+| 三全音 | 6 | C→F# | ❌ | -10 | -10 |
+| 纯五度 | 7 | C→G | ⭐⭐⭐ | -10 | +12 |
+| 小六度 | 8 | C→Ab | ⭐⭐ | -10 | +10 |
+| 大六度 | 9 | C→A | ⭐⭐ | -10 | +10 |
+| 小七度 | 10 | C→Bb | ❌ | -10 | -5 |
+| 大七度 | 11 | C→B | ❌ | -10 | -10 |
+| 纯八度 | 12 | C→C' | ⭐⭐⭐ | -10 | +12 |
+
+### 两个函数的互补关系
+
+- **stepwise**：鼓励小音程（级进），惩罚大音程（跳跃）
+- **consonance**：鼓励协和音程（任何音程只要协和），惩罚不协和音程
+
+**组合效果**：
+- 大二度（C→D）：stepwise高分(+20) + consonance低分(+5) → 整体不错
+- 大三度（C→E）：stepwise低分(+5) + consonance高分(+12) → 整体不错
+- 小二度（C→C#）：stepwise高分(+20) + consonance负分(-5) → 中等
+- 纯五度（C→G）：stepwise负分(-10) + consonance高分(+12) → 中等
+
+两者结合能产生**既流畅又悦耳**的旋律！
 
 ---
 
 ## 附录B：音高编码说明
 
-### 基因编码
+### 基因编码（32个位置）
 
 ```python
-pitch_genes = [0, 2, 4, 5, 2, 0, ...]
+pitch_genes = [0, 2, 4, 5, 2, 0, ...]  # 长度32
 ```
 
 - 每个数字是调式内的**音级索引**
 - 范围：`0` 到 `len(scale_notes)-1`
-- 例如在C大调（有20+个音）：
-  - `0, 7, 14` → C3, C4, C5 (不同八度的主音)
-  - `2, 9, 16` → E3, E4, E5 (不同八度的三音)
+- 对应32个八分音符的位置（4小节，4/4拍）
 
 ### 实际音高
 
@@ -813,50 +523,33 @@ scale_notes = [53, 55, 57, 58, 60, 62, 64, 65, 67, 69, 71, 72, ...]
 pitch_genes[i] = 5  →  scale_notes[5] = 62 (D4)
 ```
 
----
+### 音符生成
 
-## 附录C：调式音阶
+只有节奏基因为 `1`（起拍）的位置才会生成新音符：
 
-系统支持的调式（在`config.py`中定义）：
-
-### 大调
-- C Major: C D E F G A B
-- G Major: G A B C D E F#
-- D Major: D E F# G A B C#
-- A Major: A B C# D E F# G#
-- E Major: E F# G# A B C# D#
-- F Major: F G A Bb C D E
-
-### 小调（自然小调）
-- A Minor: A B C D E F G
-- E Minor: E F# G A B C D
-- D Minor: D E F G A Bb C
-
-每个调式在F3(53)到G5(79)的范围内都有20+个音可用。
+```python
+rhythm_genes = [1, 2, 1, 2, 0, ...]
+pitch_genes  = [0, 0, 2, 2, 4, ...]
+               ↓  ↓  ↓
+           音符1 音符2
+           (C4) (E4)
+```
 
 ---
 
 ## 总结对比表
 
-| 函数 | 音程特征 | 音域 | 结构性 | 适用性 |
-|------|----------|------|--------|--------|
-| stepwise | 小音程 | 中 | 低 | ⭐⭐⭐⭐⭐ |
-| leap | 大音程 | 宽 | 低 | ⭐⭐⭐ |
-| arch | 上升+下降 | 中 | 高 | ⭐⭐⭐⭐ |
-| wave | 起伏 | 中 | 中 | ⭐⭐⭐⭐ |
-| narrow_range | 集中 | 窄 | 低 | ⭐⭐⭐ |
-| wide_range | 分散 | 宽 | 低 | ⭐⭐⭐ |
-| end_tonic | 任意 | 任意 | 高 | ⭐⭐⭐⭐⭐ |
-| avoid_repetition | 多变 | 任意 | 低 | ⭐⭐⭐ |
-| variety | 多样 | 任意 | 低 | ⭐⭐⭐⭐ |
-| ascending | 上行 | 上升 | 中 | ⭐⭐⭐ |
-| descending | 下行 | 下降 | 中 | ⭐⭐⭐ |
-| center_focus | 回旋 | 中 | 中 | ⭐⭐⭐ |
-| pentatonic_feel | 无半音 | 任意 | 低 | ⭐⭐⭐ |
-| **overall** | **平衡** | **中** | **高** | **⭐⭐⭐⭐⭐** |
+| 函数 | 关注点 | 得分范围 | 归一化 | 适用性 |
+|------|--------|---------|--------|--------|
+| stepwise | 音程大小 | -10~+20/音程 | ✅ | ⭐⭐⭐⭐⭐ |
+| consonance | 音程协和度 | -15~+12/音程 | ✅ | ⭐⭐⭐⭐⭐ |
+| range | 音域范围 | -10~+20 | ❌ | ⭐⭐⭐⭐ |
+| direction | 方向变化 | 0~+20 | ✅ | ⭐⭐⭐⭐ |
+| climax | 高潮位置 | 0~+25 | ❌ | ⭐⭐⭐ |
+| **overall** | **综合** | **累加** | **部分** | **⭐⭐⭐⭐⭐** |
 
 ---
 
-*生成日期: 2024*  
-*项目: 音乐与数学 - 遗传算法音乐生成系统*
-
+*生成日期: 2024年12月*  
+*项目: 音乐与数学 - 遗传算法音乐生成系统*  
+*版本: 5函数版本*

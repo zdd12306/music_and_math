@@ -102,7 +102,27 @@ python main_batch.py
 
 ⚠️ **警告**：这会生成112个文件，需要较长时间（约3-4小时）
 
-### 2. 播放生成的音乐
+### 2. 🔬 运行消融实验（Ablation Study）
+
+**完整消融实验**（推荐用于研究/论文）：
+```bash
+python ablation_study.py
+```
+
+这将系统性地测试每个适应度函数的独立贡献，生成8个实验文件。
+
+**快速交互式测试**：
+```bash
+python quick_ablation.py
+```
+
+交互式地启用/禁用单个函数，快速测试效果。
+
+**手动配置**：直接编辑 `config.py` 中的权重，然后运行 `python main.py`。
+
+📖 详细说明请查看 `ABLATION_GUIDE.md`
+
+### 3. 播放生成的音乐
 
 ```bash
 python playmid.py
@@ -110,7 +130,7 @@ python playmid.py
 
 自动扫描并播放 `results/` 文件夹中的所有 `.mid` 文件，按 `Ctrl+C` 跳过当前曲目。
 
-### 3. 可视化分析
+### 4. 可视化分析
 
 ```bash
 python visualmid.py      # 生成钢琴卷帘图，保存到 results/plots/
@@ -215,7 +235,67 @@ PITCH_WEIGHTS = {
 }
 ```
 
+## 自定义与实验
+
+### 调整音乐风格
+
+修改 `config.py` 中的权重来调整音乐风格：
+
+```python
+# 节奏权重（精简版）
+RHYTHM_WEIGHTS = {
+    'basic': 1.5,        # 增加这个值让节奏更平衡
+    'legato': 1.2,       # 增加这个值让音符更长
+    'balanced': 1.0,     # 增加这个值避免极端
+}
+
+# 音高权重（精简版）
+PITCH_WEIGHTS = {
+    'stepwise': 2.0,     # 增加这个值让旋律更平滑
+    'arch': 1.5,         # 增加这个值强化拱形轮廓
+    'end_tonic': 1.5,    # 增加这个值强化终止感
+}
+```
+
+### 消融实验（Ablation Study）
+
+消融实验通过系统性地禁用某些函数来测试每个函数的贡献度。
+
+**快速开始**：
+```bash
+# 查看配置（所有权重已设为0）
+python config.py
+
+# 运行完整消融实验
+python ablation_study.py
+
+# 或使用交互式工具
+python quick_ablation.py
+```
+
+**手动配置示例**：
+
+只测试 `stepwise` 函数：
+```python
+RHYTHM_WEIGHTS = {'basic': 0.0, 'legato': 0.0, 'balanced': 0.0}
+PITCH_WEIGHTS = {'stepwise': 2.0, 'arch': 0.0, 'end_tonic': 0.0}
+```
+
+📖 **详细指南**：查看 `ABLATION_GUIDE.md` 了解：
+- 完整实验设计
+- 评估方法
+- 研究问题示例
+- 结果分析技巧
+
 ## 自定义适应度函数
+
+### 重要提示
+
+当前版本已精简为 **每类3个核心函数**，如需添加更多函数，建议：
+
+1. 参考 `docs_rhythm_fitness.md` 和 `docs_pitch_fitness.md` 了解设计思路
+2. 通过消融实验验证新函数的有效性
+3. 将新函数添加到 `overall` 函数的权重计算中
 
 ### 添加节奏适应度函数
 

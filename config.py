@@ -17,8 +17,8 @@ PITCH_MAX = 79  # G5 - 最高音
 # ============================================================
 
 # 基因长度
-RHYTHM_LENGTH = 16  # 16个八分音符 = 8拍 = 2小节
-PITCH_LENGTH = 16   # 对应的16个音高位置
+RHYTHM_LENGTH = 32  # 32个八分音符 = 16拍 = 4小节（4/4拍）
+PITCH_LENGTH = 32   # 对应的32个音高位置
 
 # 节奏编码
 RHYTHM_NOTE = 1      # 发声（起拍）
@@ -27,9 +27,9 @@ RHYTHM_REST = 0      # 休止符
 
 # 初始化权重（生成个体时的概率分布）
 INIT_RHYTHM_WEIGHTS = {
-    'note': 0.40,   # 40% 发声
-    'hold': 0.30,   # 30% 延长
-    'rest': 0.30,   # 30% 休止
+    'note': 0.50,   # 50% 发声
+    'hold': 0.40,   # 40% 延长
+    'rest': 0.10,   # 10% 休止
 }
 
 # ============================================================
@@ -39,7 +39,7 @@ INIT_RHYTHM_WEIGHTS = {
 # 种群设置
 POP_SIZE = 200           # 种群大小
 MAX_GEN = 1024           # 最大代数
-ELITISM_COUNT = 2        # 精英保留数量
+ELITISM_COUNT = 10        # 精英保留数量
 
 # 遗传操作概率
 CROSSOVER_RATE = 0.7     # 交叉概率 (70%)
@@ -89,37 +89,42 @@ AVAILABLE_SCALES = {
 DEFAULT_SCALE = 'C_major'
 
 # ============================================================
-# 适应度函数权重 (Fitness Function Weights)
+# 适应度函数权重 (Fitness Function Weights) - 最简版
 # ============================================================
 
-# 消融实验(Ablation Study) - 所有权重设为0
-# 逐个启用权重来测试每个函数的贡献度
+# 只保留两个最基本的适应度函数：
+# 1. 音高：级进流畅 (stepwise) - 评估音高的平滑度
+# 2. 节奏：节奏奇性 (parity) - 评估节奏的非对称性
 
-# 节奏适应度函数权重 (用于 rhythm_fitness_overall) - 消融实验
+# 节奏适应度函数权重 (用于 rhythm_fitness_overall)
 RHYTHM_WEIGHTS = {
-    'basic': 0.0,        # 基础平衡性 (原值: 1.5)
-    'legato': 0.0,       # 连贯性 (原值: 1.2)
-    'balanced': 0.0,     # 避免极端 (原值: 1.0)
+    'parity': 1.0,        # 节奏奇性（避免对称）
+    'density': 1.0,       # 节奏密度（音符密度适中）
+    'syncopation': 1.0,   # 切分音（节奏变化）
+    'rest': 1.0,          # 休止符分布（适当的休止）
+    'pattern': 1.0,       # 节奏模式（规律性）
 }
 
-# 音高适应度函数权重 (用于 pitch_fitness_overall) - 消融实验
+# 音高适应度函数权重 (用于 pitch_fitness_overall)
 PITCH_WEIGHTS = {
-    'stepwise': 0.0,     # 级进为主 (原值: 2.0)
-    'arch': 0.0,         # 拱形轮廓 (原值: 1.5)
-    'end_tonic': 0.0,    # 结束在主音 (原值: 1.5)
+    'stepwise': 1.0,      # 级进流畅（鼓励小音程）
+    'consonance': 1.0,    # 音程协和度（鼓励协和音程）
+    'range': 1.0,         # 音域平衡（适中的音域范围）
+    'direction': 1.0,     # 旋律方向变化（起伏丰富）
+    'climax': 1.0,        # 旋律高潮（有明显高潮点）
 }
 
 # ============================================================
-# 消融实验配置
+# 快速启用/禁用函数
 # ============================================================
 
-# 取消下面的注释来测试单个函数的效果
-# 例如：只测试 stepwise 函数
-# PITCH_WEIGHTS['stepwise'] = 2.0
+# 如果想测试效果，可以临时禁用某个函数：
+# PITCH_WEIGHTS['stepwise'] = 0.0
+# RHYTHM_WEIGHTS['parity'] = 0.0
 
 # 或者使用这个辅助函数快速启用单个函数
 def enable_single_rhythm_function(func_name, weight=1.0):
-    """启用单个节奏函数进行消融测试"""
+    """启用单个节奏函数（最简版）"""
     global RHYTHM_WEIGHTS
     # 先全部设为0
     for key in RHYTHM_WEIGHTS:
@@ -127,12 +132,12 @@ def enable_single_rhythm_function(func_name, weight=1.0):
     # 启用指定函数
     if func_name in RHYTHM_WEIGHTS:
         RHYTHM_WEIGHTS[func_name] = weight
-        print(f"✓ 消融实验: 已启用 rhythm_{func_name} (权重={weight})")
+        print(f"✓ 已启用 rhythm_{func_name} (权重={weight})")
     else:
         print(f"✗ 错误: 未找到函数 {func_name}")
 
 def enable_single_pitch_function(func_name, weight=1.0):
-    """启用单个音高函数进行消融测试"""
+    """启用单个音高函数（最简版）"""
     global PITCH_WEIGHTS
     # 先全部设为0
     for key in PITCH_WEIGHTS:
@@ -140,23 +145,16 @@ def enable_single_pitch_function(func_name, weight=1.0):
     # 启用指定函数
     if func_name in PITCH_WEIGHTS:
         PITCH_WEIGHTS[func_name] = weight
-        print(f"✓ 消融实验: 已启用 pitch_{func_name} (权重={weight})")
+        print(f"✓ 已启用 pitch_{func_name} (权重={weight})")
     else:
         print(f"✗ 错误: 未找到函数 {func_name}")
 
 def reset_to_default_weights():
-    """恢复默认权重"""
-    global RHYTHM_WEIGHTS, PITCH_WEIGHTS
-    RHYTHM_WEIGHTS = {
-        'basic': 1.5,
-        'legato': 1.2,
-        'balanced': 1.0,
-    }
-    PITCH_WEIGHTS = {
-        'stepwise': 2.0,
-        'arch': 1.5,
-        'end_tonic': 1.5,
-    }
+    """恢复默认权重（最简版）"""
+    # 直接更新字典内容，而不是重新赋值
+    # 这样可以保持对已导入引用的影响
+    RHYTHM_WEIGHTS['parity'] = 1.0
+    PITCH_WEIGHTS['stepwise'] = 1.0
     print("✓ 已恢复默认权重")
 
 # ============================================================
