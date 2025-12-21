@@ -235,6 +235,40 @@ def rhythm_fitness_varied(melody):
     return score
 
 
+def rhythm_fitness_overall(melody):
+    """
+    综合节奏适应度：多个节奏函数的加权组合
+    这是推荐的默认节奏评分函数
+    """
+    score = 0
+    
+    # 基础平衡性 (权重: 1.5)
+    score += rhythm_fitness_basic(melody) * 1.5
+    
+    # 适度活跃 (权重: 1.0)
+    score += rhythm_fitness_active(melody) * 1.0
+    
+    # 连贯性 (权重: 1.2)
+    score += rhythm_fitness_legato(melody) * 1.2
+    
+    # 少量切分 (权重: 0.5)
+    score += rhythm_fitness_syncopated(melody) * 0.5
+    
+    # 避免极端 (权重: 1.0)
+    score += rhythm_fitness_balanced(melody) * 1.0
+    
+    # 轻微稀疏感 (权重: 0.3)
+    score += rhythm_fitness_sparse(melody) * 0.3
+    
+    # 规律感 (权重: 0.8)
+    score += rhythm_fitness_march(melody) * 0.8
+    
+    # 变化性 (权重: 0.7)
+    score += rhythm_fitness_varied(melody) * 0.7
+    
+    return score
+
+
 # ============================================================
 # 导出函数列表
 # ============================================================
@@ -248,7 +282,8 @@ rhythm_fitness_funcs = [
     rhythm_fitness_sparse,
     rhythm_fitness_march,
     rhythm_fitness_varied,
+    rhythm_fitness_overall,  # 综合函数
 ]
 
-print(f"✓ 已加载 {len(rhythm_fitness_funcs)} 个节奏适应度函数")
+print(f"✓ 已加载 {len(rhythm_fitness_funcs)} 个节奏适应度函数（含1个综合函数）")
 

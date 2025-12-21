@@ -1,30 +1,82 @@
 import random
 import copy
 import time
+import os
 from midiutil import MIDIFile
+
+# 创建results文件夹
+RESULTS_DIR = "results"
+if not os.path.exists(RESULTS_DIR):
+    os.makedirs(RESULTS_DIR)
+    print(f"✓ 已创建 {RESULTS_DIR}/ 文件夹")
 
 # === 1. 导入适应度函数库 ===
 try:
-    from fitness_function_rhythm import rhythm_fitness_funcs
-    from fitness_function_pitch import pitch_fitness_funcs
+    from fitness_function_rhythm import rhythm_fitness_overall
+    from fitness_function_pitch import pitch_fitness_overall
+    print("✓ 已导入综合适应度函数")
 except ImportError as e:
     print(f"错误: 未找到适应度函数文件 - {e}")
-    pitch_fitness_funcs = []
-    rhythm_fitness_funcs = []
+    exit(1)
 
 # === 2. 调式定义 ===
+# 音域范围：F3(53) ~ G5(79)
+PITCH_MIN = 53
+PITCH_MAX = 79
+
+def generate_scale_in_range(root_midi, intervals, min_pitch=53, max_pitch=79):
+    """
+    在指定音域范围内生成调式音阶
+    
+    Args:
+        root_midi: 根音的MIDI音高（例如C4=60）
+        intervals: 半音间隔模式（例如大调：[2,2,1,2,2,2,1]）
+        min_pitch: 最低音高
+        max_pitch: 最高音高
+    
+    Returns:
+        list: 该范围内所有调内音的MIDI音高列表
+    """
+    scale = []
+    
+    # 先找到range内最低的根音位置
+    current = root_midi
+    while current - 12 >= min_pitch:
+        current -= 12
+    
+    # 从这个位置开始，向上生成音阶
+    while current <= max_pitch:
+        # 生成一个八度内的所有音
+        pitch = current
+        for interval in intervals:
+            if min_pitch <= pitch <= max_pitch:
+                scale.append(pitch)
+            pitch += interval
+        current += 12  # 移到下一个八度
+    
+    return sorted(list(set(scale)))  # 去重并排序
+
+# 大调音阶的半音间隔：全全半全全全半
+MAJOR_INTERVALS = [2, 2, 1, 2, 2, 2, 1]
+# 自然小调的半音间隔：全半全全半全全
+MINOR_INTERVALS = [2, 1, 2, 2, 1, 2, 2]
+
 SCALES = {
-    'C_major': [60, 62, 64, 65, 67, 69, 71],      # C D E F G A B
-    'G_major': [67, 69, 71, 72, 74, 76, 78],      # G A B C D E F#
-    'D_major': [62, 64, 66, 67, 69, 71, 73],      # D E F# G A B C#
-    'A_major': [69, 71, 73, 74, 76, 78, 80],      # A B C# D E F# G#
-    'E_major': [64, 66, 68, 69, 71, 73, 75],      # E F# G# A B C# D#
-    'F_major': [65, 67, 69, 70, 72, 74, 76],      # F G A Bb C D E
-    'A_minor': [69, 71, 72, 74, 76, 77, 79],      # A B C D E F G (自然小调)
-    'E_minor': [64, 66, 67, 69, 71, 72, 74],      # E F# G A B C D
-    'D_minor': [62, 64, 65, 67, 69, 70, 72],      # D E F G A Bb C
+    # 大调
+    'C_major': generate_scale_in_range(60, MAJOR_INTERVALS),  # C D E F G A B
+    'G_major': generate_scale_in_range(67, MAJOR_INTERVALS),  # G A B C D E F#
+    'D_major': generate_scale_in_range(62, MAJOR_INTERVALS),  # D E F# G A B C#
+    'A_major': generate_scale_in_range(69, MAJOR_INTERVALS),  # A B C# D E F# G#
+    'E_major': generate_scale_in_range(64, MAJOR_INTERVALS),  # E F# G# A B C# D#
+    'F_major': generate_scale_in_range(65, MAJOR_INTERVALS),  # F G A Bb C D E
+    
+    # 小调
+    'A_minor': generate_scale_in_range(69, MINOR_INTERVALS),  # A B C D E F G
+    'E_minor': generate_scale_in_range(64, MINOR_INTERVALS),  # E F# G A B C D
+    'D_minor': generate_scale_in_range(62, MINOR_INTERVALS),  # D E F G A Bb C
 }
 
+print(SCALES)
 # === 3. 编码配置 ===
 RHYTHM_LENGTH = 16  # 16个八分音符 = 4小节
 PITCH_LENGTH = 16   # 对应的16个音高位置
@@ -39,10 +91,11 @@ class Individual:
     def __init__(self, rhythm_genes=None, pitch_genes=None, scale_notes=None):
         """
         rhythm_genes: 长度16的节奏基因 [0=休止, 1=发声, 2=延长]
-        pitch_genes: 长度16的音高基因 [0-6对应调式内的7个音]
-        scale_notes: 调式音阶列表
+        pitch_genes: 长度16的音高基因 [0到len(scale_notes)-1，索引调式内的音]
+        scale_notes: 调式音阶列表（MIDI音高）
         """
         self.scale_notes = scale_notes if scale_notes else SCALES['C_major']
+        self.num_scale_notes = len(self.scale_notes)
         
         if rhythm_genes:
             self.rhythm_genes = rhythm_genes
@@ -56,8 +109,9 @@ class Individual:
         if pitch_genes:
             self.pitch_genes = pitch_genes
         else:
-            # 随机生成音高（调式内的7个音）
-            self.pitch_genes = [random.randint(0, 6) for _ in range(PITCH_LENGTH)]
+            # 随机生成音高索引（索引范围：0 到 调式音数量-1）
+            self.pitch_genes = [random.randint(0, self.num_scale_notes - 1) 
+                               for _ in range(PITCH_LENGTH)]
             
         self.rhythm_fitness = 0.0
         self.pitch_fitness = 0.0
@@ -177,15 +231,15 @@ def mutate_rhythm(genes, rate=0.05):
         new_genes[0] = RHYTHM_NOTE
     return new_genes
 
-def mutate_pitch(genes, rate=0.05):
+def mutate_pitch(genes, num_scale_notes, rate=0.05):
     """音高变异"""
     new_genes = genes[:]
     for i in range(len(new_genes)):
         if random.random() < rate:
-            new_genes[i] = random.randint(0, 6)
+            new_genes[i] = random.randint(0, num_scale_notes - 1)
     return new_genes
 
-def musical_transform_pitch(genes):
+def musical_transform_pitch(genes, num_scale_notes):
     """音高特殊变换：移调、倒影、逆行"""
     new_genes = genes[:]
     op = random.choice(['transposition', 'inversion', 'retrograde'])
@@ -194,10 +248,10 @@ def musical_transform_pitch(genes):
         new_genes.reverse()
     elif op == 'transposition':
         shift = random.choice([-2, -1, 1, 2])
-        new_genes = [(g + shift) % 7 for g in new_genes]
+        new_genes = [(g + shift) % num_scale_notes for g in new_genes]
     elif op == 'inversion':
-        pivot = 3  # 中心音
-        new_genes = [(2 * pivot - g) % 7 for g in new_genes]
+        pivot = num_scale_notes // 2  # 中心音
+        new_genes = [(2 * pivot - g) % num_scale_notes for g in new_genes]
     
     return new_genes
 
@@ -294,17 +348,20 @@ def run_genetic_algorithm(rhythm_fitness_func, pitch_fitness_func,
             if random.random() < 0.7:
                 c1_pitch, c2_pitch = crossover_genes(c1_pitch, c2_pitch)
             
+            # 获取音阶大小
+            num_scale_notes = len(scale_notes)
+            
             # 变异
             c1_rhythm = mutate_rhythm(c1_rhythm)
-            c1_pitch = mutate_pitch(c1_pitch)
+            c1_pitch = mutate_pitch(c1_pitch, num_scale_notes)
             c2_rhythm = mutate_rhythm(c2_rhythm)
-            c2_pitch = mutate_pitch(c2_pitch)
+            c2_pitch = mutate_pitch(c2_pitch, num_scale_notes)
             
             # 特殊变换
             if random.random() < 0.03:
-                c1_pitch = musical_transform_pitch(c1_pitch)
+                c1_pitch = musical_transform_pitch(c1_pitch, num_scale_notes)
             if random.random() < 0.03:
-                c2_pitch = musical_transform_pitch(c2_pitch)
+                c2_pitch = musical_transform_pitch(c2_pitch, num_scale_notes)
             if random.random() < 0.03:
                 c1_rhythm = musical_transform_rhythm(c1_rhythm)
             if random.random() < 0.03:
@@ -330,7 +387,10 @@ def run_genetic_algorithm(rhythm_fitness_func, pitch_fitness_func,
     return best
 
 def save_to_midi(individual, filename):
-    """保存为MIDI文件"""
+    """保存为MIDI文件到results文件夹"""
+    # 确保文件名保存到results文件夹
+    filepath = os.path.join(RESULTS_DIR, filename)
+    
     mf = MIDIFile(1)
     track = 0
     mf.addTrackName(track, 0, "GA Melody")
@@ -341,9 +401,9 @@ def save_to_midi(individual, filename):
     for pitch, start, duration in decoded_notes:
         mf.addNote(track, 0, pitch, start, duration, 100)
     
-    with open(filename, 'wb') as out_f:
+    with open(filepath, 'wb') as out_f:
         mf.writeFile(out_f)
-    print(f"✓ 已保存: {filename}")
+    print(f"✓ 已保存: {filepath}")
 
 # === 7. 主程序 ===
 if __name__ == "__main__":
