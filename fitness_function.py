@@ -20,6 +20,39 @@ CHORD_C_MAJOR = {0, 4, 7}
 def fitness_function_random(melody):
     return len(melody.notes)
 
+
+def fitness_rhythmic_sustain(melody):
+    """Encourages HOLD notes by rewarding longer durations."""
+    score = 0
+    durations = [n[1] for n in melody.notes]
+    if not durations: return 0
+    num = 0
+    for d in durations:
+        if d >= 1.0 and d <= 2.0: # Reward quarter notes or longer
+            score += d * 3
+            num += d
+        if d > 2.5: # ??
+            score -= 30
+            
+    if num >= 16 : # too many sustain, die
+        score -= num * 3
+    return score 
+
+def fitness_rhythmic_rest(melody):
+    """Encourages STOP (rests) by checking the total melody length vs total duration."""
+    # GENOME_LENGTH is 32 (eight notes), which equals 16 beats.
+    total_beats_possible = 32
+    actual_beats_played = sum(n[2] for n in melody.notes)
+    # If played beats < 16, it means there are rests (STOPS)
+    gap = total_beats_possible - actual_beats_played
+    
+    if 1.0 <= gap <= 3.0: # We want some rests, but not a silent song
+        return 25
+    if gap > 3.0:
+        return -25
+    
+    return 0
+
 def fitness_function_c_major(melody):
     score = 0
     # melody.notes 格式为 [(pitch, duration), ...]
@@ -62,79 +95,11 @@ def fitness_function_stepwise(melody):
     score_flow = fitness_function_diff(melody)
     return score_tonality + score_flow
 
-def fitness_function_anti_boredom(melody):
-    score = fitness_function_stepwise(melody) # 继承标准旋律
-    pitches = [n[0] for n in melody.notes]
-    
-    # 惩罚重复音
-    for i in range(len(pitches) - 1):
-        if pitches[i] == pitches[i+1]:
-            score -= 15 # 惩罚重复
-    return score
-
-def fitness_function_7(melody):
-    pitches = [n[0] for n in melody.notes]
-    if not pitches: return 0
-    
-    mid_point = len(pitches) // 2
-    score = 0
-    
-    # 前半段奖励上升
-    for i in range(mid_point):
-        if i+1 < len(pitches) and pitches[i+1] > pitches[i]:
-            score += 10
-            
-    # 后半段奖励下降
-    for i in range(mid_point, len(pitches)-1):
-        if pitches[i+1] < pitches[i]:
-            score += 10
-            
-    # 叠加调性约束
-    return score + fitness_function_c_major(melody)
-
-def fitness_function_8(melody):
-    score = 0
-    pitches = [n[0] for n in melody.notes]
-    
-    # 基础调性
-    score += fitness_function_c_major(melody) * 0.5 
-    
-    for i in range(len(pitches) - 1):
-        interval = abs(pitches[i] - pitches[i+1])
-        # 3(小三度), 4(大三度), 7(纯五度), 12(八度)
-        if interval in [3, 4, 7, 12]:
-            score += 20 
-        elif interval <= 2: # 稍微惩罚级进，鼓励跳跃
-            score -= 5
-            
-    return score
-
-def fitness_function_9(melody):
-    pitches = [n[0] for n in melody.notes]
-    if not pitches: return 0
-    
-    score = fitness_function_c_major(melody)
-    
-    # 计算音域 (Range)
-    pitch_range = max(pitches) - min(pitches)
-    
-    # 如果音域控制在 5 个半音内 (比如 Do 到 Fa)，给高分
-    if pitch_range <= 5:
-        score += 100
-    elif pitch_range > 12:
-        score -= 50 # 惩罚大跨度
-        
-    return score
-
 def fitness_function_11(melody):
     pitches = [n[0] for n in melody.notes]
     durations = [n[1] for n in melody.notes]
     
-    score = 0
-    
-    # 1. 调性 (基础分)
-    score += fitness_function_c_major(melody)
-    
+    score = 0    
     # 2. 骨干音奖励 (C, E, G)
     for p in pitches:
         if p % 12 in CHORD_C_MAJOR:
@@ -154,11 +119,8 @@ def fitness_function_11(melody):
             jumps += 1
     score -= jumps * 15
     
-    # 5. 节奏多样性 (如果全是同样的节奏，扣分)
-    if len(set(durations)) == 1:
-        score -= 30
-        
     return score
+
 
 # === 辅助工具：转换为 MusPy 对象 ===
 
@@ -182,7 +144,7 @@ def convert_to_muspy(melody):
     if not melody.notes:
         return music
 
-    for pitch, duration_beats in melody.notes:
+    for pitch, _, duration_beats in melody.notes:
         duration_ticks = int(duration_beats * resolution)
         
         note = muspy.Note(
@@ -224,7 +186,6 @@ def fitness_function_muspy(melody):
         
         if np.isnan(total_score):
             return 0
-            
         return total_score
         
     except Exception as e:
@@ -236,36 +197,12 @@ def fitness_function_10(melody):
     score = fitness_function_stepwise(melody) # 基础好听
     durations = [n[1] for n in melody.notes]
 
-    # 奖励节奏变化：如果相邻两个音符时值不同
+    # 奖励节奏变化：如果相邻两个音符都不同
     for i in range(len(durations)-1):
-        if durations[i] != durations[i+1]:
+        if durations[i] != durations[i+1] and melody.notes[i][0] != melody.notes[i+1][0]:
             score += 5
-            
+
     return score
-
-def fitness_rhythmic_sustain(melody):
-    """Encourages HOLD notes by rewarding longer durations."""
-    score = 0
-    durations = [n[1] for n in melody.notes]
-    if not durations: return 0
-    for d in durations:
-        if d >= 1.0 and d <= 2.0: # Reward quarter notes or longer
-            score += d * 7
-        if d > 2.5: # ??
-            score -= 30
-    return score 
-
-def fitness_rhythmic_rest(melody):
-    """Encourages STOP (rests) by checking the total melody length vs total duration."""
-    # GENOME_LENGTH is 32 (eight notes), which equals 16 beats.
-    total_beats_possible = 16
-    actual_beats_played = sum(n[2] for n in melody.notes)
-    # If played beats < 16, it means there are rests (STOPS)
-    gap = total_beats_possible - actual_beats_played
-    
-    if 1.0 <= gap <= 4.0: # We want some rests, but not a silent song
-        return 50
-    return 0
 
 
 def create_weighted_fitness(a, b, c, d, e):
@@ -282,12 +219,9 @@ def create_weighted_fitness(a, b, c, d, e):
         score = 0
         score += fitness_function_11(melody) * a
         score += fitness_function_10(melody) * b
-        
-        # --- New Rhythmic Character Boosts ---
         score += fitness_rhythmic_sustain(melody) * c
         score += fitness_rhythmic_rest(melody) * d
 
-        
         if MUSPY_AVAILABLE:
             score += fitness_function_muspy(melody) * e
             
@@ -298,7 +232,7 @@ def create_weighted_fitness(a, b, c, d, e):
 
 # Define the range of weights you want to test
 # Example: Testing weights 0.5, 1.0, and 2.0 for different components
-weight_options = [0.5, 0.7, 1.1, 1.3, 2.2, 2.9]
+weight_options = [0.5,0.7, 1.1, 1.3, 2.2, 2.9, 3.7, 3.9, 4.3, 4.7]
 
 # Generate all combinations (Grid Search)
 combinations = list(itertools.product(weight_options, repeat=5))
@@ -313,5 +247,5 @@ for combo in selected_combos:
     # Unpack the tuple into a, b, c, d, e
     new_func = create_weighted_fitness(*combo)
     funcs.append(new_func)
-
+# funcs.append(fitness_function_muspy)
 print(f"Generated {funcs} unique fitness functions for testing.")

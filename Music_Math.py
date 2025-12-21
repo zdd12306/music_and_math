@@ -10,7 +10,7 @@ try:
     from fitness_function import funcs
 except ImportError:
     print("错误: 未找到 fitness_function.py 或 funcs 列表。请确保文件存在。")
-    funcs = []
+    funcs = []      
 
 # === 2. 基础配置 (严格对应课件编码) ===
 # 课件 P.43-44: 乐音体系编码
@@ -21,7 +21,7 @@ CODE_REST = 0                  # 0 代表休止符
 CODE_HOLD = NUM_PITCHES + 1    # 14/29 代表延长记号 (Sustain) [cite: 438, 446]
 
 # 基因长度: 4小节 x 4拍 x 2(八分音符) = 32 [cite: 444]
-GENOME_LENGTH = 32 
+GENOME_LENGTH = 64 
 
 # === 3. 数据结构定义 ===
 def generate_weighted_gene():
@@ -198,8 +198,8 @@ def musical_transform(ind):
 def run_genetic_algorithm(target_fitness_func, func_name="Unknown"):
     # 参数设置 [cite: 540]
     POP_SIZE = 200
-    MAX_GEN = 1024
-    ELITISM_COUNT = 2 # 精英保留数量
+    MAX_GEN = 2000
+    ELITISM_COUNT = 5 # 精英保留数量
     
     # 初始化种群
     population = [Individual() for _ in range(POP_SIZE)]
@@ -247,8 +247,8 @@ def run_genetic_algorithm(target_fitness_func, func_name="Unknown"):
             c2 = mutate(c2)
             
             # 特殊变换
-            if random.random() < 0.03: c1 = musical_transform(c1)
-            if random.random() < 0.03: c2 = musical_transform(c2)
+            if random.random() < 0.1: c1 = musical_transform(c1)
+            if random.random() < 0.1: c2 = musical_transform(c2)
                 
             next_gen.append(c1)
             if len(next_gen) < POP_SIZE: next_gen.append(c2)
@@ -281,7 +281,9 @@ def save_to_midi(individual, filename):
 if __name__ == "__main__":
     if not funcs:
         print("警告: funcs 列表为空，请检查 fitness_function.py")
-    
+    import time, os
+    ts = (int)(time.time())
+    os.mkdir(f'{ts}')
     for i, fitness_func in enumerate(funcs):
         # 获取函数名用于生成文件名
         fname = fitness_func.__name__
@@ -290,7 +292,7 @@ if __name__ == "__main__":
         best_ind = run_genetic_algorithm(fitness_func, func_name=fname)
         debug_genome(best_ind)
         # 保存结果
-        output_filename = f"output_{fname}.mid"
+        output_filename = f"{ts}/output_{fname}.mid"
         save_to_midi(best_ind, output_filename)
         
     print("\n所有函数运行完毕！")
