@@ -53,4 +53,4 @@ if __name__ == "__main__":
         view_midi_score(midi_files[0])
         
         # 如果想打开特定文件，取消下面的注释
-        # view_midi_score("results/output_C_major_rhythm_fitness_basic_pitch_fitness_stepwise.mid")
+        view_midi_score("/home/benyan2023/workspace/Homework/music_and_math/1766198607/output_fit_w_3.7_0.7_0.7.mid")
